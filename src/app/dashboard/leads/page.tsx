@@ -2,28 +2,39 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, ArrowRight, Calendar } from "lucide-react";
 
-// ─── Mock leads ───
-const leads = [
-  { id: "1", name: "Alex Martinez", email: "alex@example.com", phone: "+1 555-2001", status: "NEW", source: "Google Ads", assignedTo: "Priya K.", nextFollowUp: "2026-05-28" },
-  { id: "2", name: "Nina Patel", email: "nina@example.com", phone: "+1 555-2002", status: "CONTACTED", source: "Referral", assignedTo: "Raj M.", nextFollowUp: "2026-05-30" },
-  { id: "3", name: "James Lee", email: "james@example.com", phone: "+1 555-2003", status: "PROPOSAL_SENT", source: "Website", assignedTo: "Anika S.", nextFollowUp: "2026-06-01" },
-  { id: "4", name: "Sofia Garcia", email: "sofia@example.com", phone: "+1 555-2004", status: "CONVERTED", source: "LinkedIn", assignedTo: "Vikram T.", nextFollowUp: null },
-  { id: "5", name: "Tom Wilson", email: "tom@example.com", phone: "+1 555-2005", status: "NEW", source: "Cold Email", assignedTo: "Maya D.", nextFollowUp: "2026-05-29" },
-  { id: "6", name: "Emma Brown", email: "emma@example.com", phone: "+1 555-2006", status: "LOST", source: "Facebook", assignedTo: "Priya K.", nextFollowUp: null },
-  { id: "7", name: "Liam Davis", email: "liam@example.com", phone: "+1 555-2007", status: "CONTACTED", source: "Google Ads", assignedTo: "Raj M.", nextFollowUp: "2026-06-02" },
-  { id: "8", name: "Ava Taylor", email: "ava@example.com", phone: "+1 555-2008", status: "PROPOSAL_SENT", source: "Referral", assignedTo: "Anika S.", nextFollowUp: "2026-06-03" },
-];
+type LeadStatus = "NEW" | "CONTACTED" | "PROPOSAL_SENT" | "CONVERTED" | "LOST";
+
+type LeadItem = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: LeadStatus;
+  source: string | null;
+  assignedTo: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
+  nextFollowUp: string | null;
+};
+
+type LeadApiResponse = {
+  data: {
+    leads: LeadItem[];
+    meta: { count: number };
+  };
+};
 
 const statusColumns = [
   { key: "NEW", label: "New", color: "bg-blue-500" },
@@ -33,7 +44,7 @@ const statusColumns = [
   { key: "LOST", label: "Lost", color: "bg-red-500" },
 ];
 
-const statusBadgeVariant: Record<string, "default" | "warning" | "success" | "destructive" | "secondary"> = {
+const statusBadgeVariant: Record<LeadStatus, "default" | "warning" | "success" | "destructive" | "secondary"> = {
   NEW: "default",
   CONTACTED: "warning",
   PROPOSAL_SENT: "secondary",
@@ -44,11 +55,27 @@ const statusBadgeVariant: Record<string, "default" | "warning" | "success" | "de
 export default function LeadsPage() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"pipeline" | "list">("pipeline");
+  const {
+    data: leads = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["leads"],
+    queryFn: async (): Promise<LeadItem[]> => {
+      const response = await fetch("/api/v1/leads");
+      if (!response.ok) {
+        throw new Error("Unable to fetch leads");
+      }
+      const json = (await response.json()) as LeadApiResponse;
+      return json.data.leads;
+    },
+  });
 
   const filtered = leads.filter(
     (l) =>
       l.name.toLowerCase().includes(search.toLowerCase()) ||
-      l.email.toLowerCase().includes(search.toLowerCase())
+      (l.email ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -111,6 +138,22 @@ export default function LeadsPage() {
       </div>
 
       {/* ─── Pipeline View ─── */}
+      {isError && (
+        <div className="flex items-center gap-3">
+          <Badge variant="warning" className="w-fit">
+            Unable to fetch leads.
+          </Badge>
+          <Button size="sm" variant="outline" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {isLoading && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading leads...</p>
+      )}
+      {!isLoading && !isError && filtered.length === 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No leads found.</p>
+      )}
       {view === "pipeline" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {statusColumns.map((col) => {
@@ -147,10 +190,10 @@ export default function LeadsPage() {
                             </span>
                             <ArrowRight className="h-3.5 w-3.5 text-gray-400" />
                           </div>
-                          <p className="text-xs text-gray-400">{lead.email}</p>
+                          <p className="text-xs text-gray-400">{lead.email ?? "—"}</p>
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-gray-400">
-                              {lead.source}
+                              {lead.source ?? "—"}
                             </span>
                             {lead.nextFollowUp && (
                               <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
@@ -164,7 +207,7 @@ export default function LeadsPage() {
                           </div>
                           <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
                             <span className="text-[10px] text-gray-400">
-                              Assigned: {lead.assignedTo}
+                              Assigned: {lead.assignedTo?.name ?? "Unassigned"}
                             </span>
                           </div>
                         </CardContent>
@@ -196,14 +239,16 @@ export default function LeadsPage() {
                   {filtered.map((lead) => (
                     <tr key={lead.id} className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                       <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{lead.name}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{lead.email}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{lead.email ?? "—"}</td>
                       <td className="px-6 py-4">
-                        <Badge variant={statusBadgeVariant[lead.status]}>
+                        <Badge variant={statusBadgeVariant[lead.status as LeadStatus]}>
                           {lead.status.replace("_", " ")}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{lead.source}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{lead.assignedTo}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{lead.source ?? "—"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {lead.assignedTo?.name ?? "Unassigned"}
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {lead.nextFollowUp
                           ? new Date(lead.nextFollowUp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })

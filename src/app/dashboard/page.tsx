@@ -2,6 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -11,13 +12,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Users,
-  TrendingUp,
-  DollarSign,
-  Megaphone,
   ArrowUpRight,
   ArrowDownRight,
-  UserPlus,
   BarChart3,
 } from "lucide-react";
 import {
@@ -35,6 +31,29 @@ import {
   Cell,
 } from "recharts";
 
+type DashboardSummary = {
+  clients: number;
+  activeCampaigns: number;
+  totalLeads: number;
+  conversionRate: number;
+};
+
+type DashboardAnalyticsResponse = {
+  data: {
+    summary: DashboardSummary;
+    revenueData: Array<{ month: string; revenue: number; expenses: number }>;
+    leadConversionData: Array<{ month: string; converted: number; lost: number }>;
+    campaignPerformance: Array<{ name: string; value: number; color: string }>;
+    recentActivities: Array<{
+      user: string;
+      action: string;
+      target: string;
+      time: string;
+      type: "success" | "warning" | "info" | "default";
+    }>;
+  };
+};
+
 // ─── Animation variants ───
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -51,13 +70,13 @@ const stagger = {
 };
 
 // ─── Mock data ───
-const stats = [
+const defaultStats = [
   {
     title: "Total Revenue",
     value: "$84,254",
     change: 12.5,
     trend: "up" as const,
-    icon: DollarSign,
+    // icon: DollarSign,
     gradient: "from-emerald-500 to-teal-600",
     shadow: "shadow-emerald-500/25",
   },
@@ -66,7 +85,7 @@ const stats = [
     value: "48",
     change: 8.2,
     trend: "up" as const,
-    icon: Users,
+    // icon: Users,
     gradient: "from-blue-500 to-indigo-600",
     shadow: "shadow-blue-500/25",
   },
@@ -75,7 +94,7 @@ const stats = [
     value: "24",
     change: -3.1,
     trend: "down" as const,
-    icon: Megaphone,
+    // icon: Megaphone,
     gradient: "from-purple-500 to-pink-600",
     shadow: "shadow-purple-500/25",
   },
@@ -84,149 +103,97 @@ const stats = [
     value: "127",
     change: 24.3,
     trend: "up" as const,
-    icon: UserPlus,
+    // icon: UserPlus,
     gradient: "from-amber-500 to-orange-600",
     shadow: "shadow-amber-500/25",
   },
 ];
 
-const revenueData = [
-  { month: "Jan", revenue: 4200, expenses: 2400 },
-  { month: "Feb", revenue: 5800, expenses: 2800 },
-  { month: "Mar", revenue: 6200, expenses: 3100 },
-  { month: "Apr", revenue: 5400, expenses: 2600 },
-  { month: "May", revenue: 7800, expenses: 3200 },
-  { month: "Jun", revenue: 8500, expenses: 3500 },
-  { month: "Jul", revenue: 7200, expenses: 3100 },
-  { month: "Aug", revenue: 9100, expenses: 3800 },
-  { month: "Sep", revenue: 8800, expenses: 3600 },
-  { month: "Oct", revenue: 10200, expenses: 4100 },
-  { month: "Nov", revenue: 9500, expenses: 3900 },
-  { month: "Dec", revenue: 11800, expenses: 4500 },
-];
-
-const leadConversionData = [
-  { month: "Jan", converted: 18, lost: 6 },
-  { month: "Feb", converted: 22, lost: 8 },
-  { month: "Mar", converted: 28, lost: 5 },
-  { month: "Apr", converted: 24, lost: 9 },
-  { month: "May", converted: 32, lost: 7 },
-  { month: "Jun", converted: 36, lost: 4 },
-];
-
-const campaignPerformance = [
-  { name: "SEO", value: 35, color: "#6366f1" },
-  { name: "PPC", value: 25, color: "#a855f7" },
-  { name: "Social Media", value: 20, color: "#ec4899" },
-  { name: "Content", value: 12, color: "#14b8a6" },
-  { name: "Email", value: 8, color: "#f59e0b" },
-];
-
-const recentActivities = [
-  {
-    user: "Priya K.",
-    action: "closed a deal with",
-    target: "TechVision Inc.",
-    time: "2 mins ago",
-    type: "success",
-  },
-  {
-    user: "Raj M.",
-    action: "updated campaign",
-    target: "Q4 Social Push",
-    time: "15 mins ago",
-    type: "info",
-  },
-  {
-    user: "Anika S.",
-    action: "added new lead",
-    target: "StartupXYZ",
-    time: "1 hour ago",
-    type: "default",
-  },
-  {
-    user: "Vikram T.",
-    action: "submitted SEO report for",
-    target: "CloudServe Ltd.",
-    time: "2 hours ago",
-    type: "warning",
-  },
-  {
-    user: "Maya D.",
-    action: "sent invoice to",
-    target: "DataFlow Corp.",
-    time: "3 hours ago",
-    type: "success",
-  },
-];
+type StatItem = {
+  title: string;
+  value: string;
+  change: number;
+  trend: "up" | "down";
+  gradient: string;
+  shadow: string;
+};
 
 // ─── Stat Card Component ───
-function StatCard({
+export const StatCard = ({
   stat,
   index,
 }: {
-  stat: (typeof stats)[0];
+  stat: StatItem;
   index: number;
-}) {
+}) => {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: index * 0.1 }}
-    >
-      <Card className="relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {stat.title}
-              </p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                {stat.value}
-              </p>
-              <div className="flex items-center gap-1">
-                {stat.trend === "up" ? (
-                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                ) : (
-                  <ArrowDownRight className="h-4 w-4 text-red-500" />
-                )}
-                <span
-                  className={`text-sm font-semibold ${
-                    stat.trend === "up"
+    <div className="bg-black">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: index * 0.1 }}
+      >
+        <Card className="relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  {stat.title}
+                </p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {stat.value}
+                </p>
+                <div className="flex items-center gap-1">
+                  {stat.trend === "up" ? (
+                    <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <ArrowDownRight className="h-4 w-4 text-red-500" />
+                  )}
+                  <span
+                    className={`text-sm font-semibold ${stat.trend === "up"
                       ? "text-emerald-600 dark:text-emerald-400"
                       : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {Math.abs(stat.change)}%
-                </span>
-                <span className="text-xs text-gray-400">vs last month</span>
+                      }`}
+                  >
+                    {Math.abs(stat.change)}%
+                  </span>
+                  <span className="text-xs text-gray-400">vs last month</span>
+                </div>
+              </div>
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${stat.gradient} shadow-lg ${stat.shadow}`}
+              >
+                {/* <stat.icon className="h-7 w-7 text-white" /> */}
               </div>
             </div>
-            <div
-              className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${stat.gradient} shadow-lg ${stat.shadow}`}
-            >
-              <stat.icon className="h-7 w-7 text-white" />
-            </div>
-          </div>
-        </CardContent>
-        {/* Decorative gradient stripe */}
-        <div
-          className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${stat.gradient} opacity-60`}
-        />
-      </Card>
-    </motion.div>
+          </CardContent>
+          {/* Decorative gradient stripe */}
+          <div
+            className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${stat.gradient} opacity-60`}
+          />
+        </Card>
+      </motion.div>
+    </div>
   );
 }
 
 // ─── Custom Tooltip ───
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ color?: string; name?: string; value?: number }>;
+  label?: string;
+}) {
   if (!active || !payload) return null;
   return (
     <div className="rounded-xl border border-gray-200/50 bg-white/95 p-3 shadow-xl backdrop-blur-sm dark:border-gray-700/50 dark:bg-gray-900/95">
       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
         {label}
       </p>
-      {payload.map((entry: any, i: number) => (
+      {payload.map((entry, i: number) => (
         <p key={i} className="text-sm font-bold" style={{ color: entry.color }}>
           {entry.name}: ${entry.value?.toLocaleString()}
         </p>
@@ -237,6 +204,46 @@ function CustomTooltip({ active, payload, label }: any) {
 
 // ─── Dashboard Page ───
 export default function DashboardPage() {
+  const { data, isError, isLoading, refetch } = useQuery({
+    queryKey: ["dashboard-analytics"],
+    queryFn: async () => {
+      const response = await fetch("/api/v1/dashboard/analytics");
+      if (!response.ok) {
+        throw new Error("Unable to fetch dashboard analytics");
+      }
+      const json = (await response.json()) as DashboardAnalyticsResponse;
+      return json.data;
+    },
+  });
+
+  const summary = data?.summary ?? null;
+
+  const stats: StatItem[] = summary
+    ? [
+      {
+        ...defaultStats[0],
+        value: `${summary.conversionRate}%`,
+      },
+      {
+        ...defaultStats[1],
+        value: summary.clients.toString(),
+      },
+      {
+        ...defaultStats[2],
+        value: summary.activeCampaigns.toString(),
+      },
+      {
+        ...defaultStats[3],
+        value: summary.totalLeads.toString(),
+      },
+    ]
+    : defaultStats;
+
+  const revenueData = data?.revenueData ?? [];
+  const leadConversionData = data?.leadConversionData ?? [];
+  const campaignPerformance = data?.campaignPerformance ?? [];
+  const recentActivities = data?.recentActivities ?? [];
+
   return (
     <motion.div
       className="space-y-6"
@@ -266,6 +273,23 @@ export default function DashboardPage() {
           <StatCard key={stat.title} stat={stat} index={i} />
         ))}
       </div>
+      {isLoading && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Loading dashboard analytics...
+        </p>
+      )}
+      {isError && (
+        <div className="flex items-center gap-3">
+          <Badge variant="warning">Unable to fetch dashboard analytics.</Badge>
+          <Badge
+            variant="secondary"
+            className="cursor-pointer hover:opacity-80"
+            onClick={() => void refetch()}
+          >
+            Retry
+          </Badge>
+        </div>
+      )}
 
       {/* ─── Charts Row ─── */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -378,8 +402,8 @@ export default function DashboardPage() {
                     paddingAngle={4}
                     dataKey="value"
                   >
-                    {campaignPerformance.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
+                    {campaignPerformance.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -470,15 +494,14 @@ export default function DashboardPage() {
                   >
                     {/* Avatar dot */}
                     <div
-                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                        activity.type === "success"
-                          ? "bg-emerald-500"
-                          : activity.type === "warning"
+                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${activity.type === "success"
+                        ? "bg-emerald-500"
+                        : activity.type === "warning"
                           ? "bg-amber-500"
                           : activity.type === "info"
-                          ? "bg-blue-500"
-                          : "bg-gray-400"
-                      }`}
+                            ? "bg-blue-500"
+                            : "bg-gray-400"
+                        }`}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-700 dark:text-gray-300">

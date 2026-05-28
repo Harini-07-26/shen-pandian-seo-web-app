@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -15,75 +16,26 @@ import {
   Plus,
   Search,
   MoreVertical,
-  Building2,
   Mail,
   Phone,
   Globe,
 } from "lucide-react";
 
-// ─── Mock clients ───
-const clients = [
-  {
-    id: "1",
-    companyName: "TechVision Inc.",
-    contactName: "John Smith",
-    email: "john@techvision.com",
-    phone: "+1 555-0101",
-    services: ["SEO", "PPC"],
-    paymentStatus: "PAID",
-    website: "techvision.com",
-  },
-  {
-    id: "2",
-    companyName: "CloudServe Ltd.",
-    contactName: "Sarah Chen",
-    email: "sarah@cloudserve.io",
-    phone: "+1 555-0102",
-    services: ["CONTENT", "SOCIAL_MEDIA"],
-    paymentStatus: "PENDING",
-    website: "cloudserve.io",
-  },
-  {
-    id: "3",
-    companyName: "DataFlow Corp.",
-    contactName: "Raj Patel",
-    email: "raj@dataflow.com",
-    phone: "+1 555-0103",
-    services: ["SEO", "EMAIL_MARKETING"],
-    paymentStatus: "OVERDUE",
-    website: "dataflow.com",
-  },
-  {
-    id: "4",
-    companyName: "GreenLeaf Bio",
-    contactName: "Anita Kumar",
-    email: "anita@greenleaf.bio",
-    phone: "+1 555-0104",
-    services: ["PPC", "SOCIAL_MEDIA", "SEO"],
-    paymentStatus: "PAID",
-    website: "greenleaf.bio",
-  },
-  {
-    id: "5",
-    companyName: "StartupXYZ",
-    contactName: "Mike Johnson",
-    email: "mike@startupxyz.com",
-    phone: "+1 555-0105",
-    services: ["CONTENT"],
-    paymentStatus: "PAID",
-    website: "startupxyz.com",
-  },
-  {
-    id: "6",
-    companyName: "NexGen Solutions",
-    contactName: "Lisa Wang",
-    email: "lisa@nexgen.co",
-    phone: "+1 555-0106",
-    services: ["SEO", "PPC", "CONTENT"],
-    paymentStatus: "PENDING",
-    website: "nexgen.co",
-  },
-];
+type ClientItem = {
+  id: string;
+  companyName: string;
+  contactName: string | null;
+  email: string | null;
+  phone: string | null;
+  paymentStatus: "PAID" | "PENDING" | "OVERDUE";
+};
+
+type ClientApiResponse = {
+  data: {
+    clients: ClientItem[];
+    meta: { count: number };
+  };
+};
 
 const paymentStatusColors: Record<string, "success" | "warning" | "destructive"> = {
   PAID: "success",
@@ -93,11 +45,27 @@ const paymentStatusColors: Record<string, "success" | "warning" | "destructive">
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
+  const {
+    data: clients = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async (): Promise<ClientItem[]> => {
+      const response = await fetch("/api/v1/clients");
+      if (!response.ok) {
+        throw new Error("Unable to fetch clients");
+      }
+      const json = (await response.json()) as ClientApiResponse;
+      return json.data.clients;
+    },
+  });
 
   const filtered = clients.filter(
     (c) =>
       c.companyName.toLowerCase().includes(search.toLowerCase()) ||
-      c.contactName.toLowerCase().includes(search.toLowerCase())
+      (c.contactName ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -135,6 +103,24 @@ export default function ClientsPage() {
       </div>
 
       {/* ─── Client Cards Grid ─── */}
+      {isError && (
+        <div className="flex items-center gap-3">
+          <Badge variant="warning" className="w-fit">
+            Unable to fetch clients.
+          </Badge>
+          <Button size="sm" variant="outline" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {isLoading && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading clients...</p>
+      )}
+      {!isLoading && !isError && filtered.length === 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No clients found.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((client, i) => (
           <motion.div
@@ -151,7 +137,7 @@ export default function ClientsPage() {
                   </div>
                   <div>
                     <CardTitle className="text-base">{client.companyName}</CardTitle>
-                    <p className="text-xs text-gray-400">{client.contactName}</p>
+                    <p className="text-xs text-gray-400">{client.contactName ?? "—"}</p>
                   </div>
                 </div>
                 <button className="rounded-lg p-1 text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 group-hover:opacity-100 dark:hover:bg-gray-800">
@@ -162,26 +148,22 @@ export default function ClientsPage() {
                 <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
                   <div className="flex items-center gap-2">
                     <Mail className="h-3.5 w-3.5" />
-                    <span>{client.email}</span>
+                    <span>{client.email ?? "—"}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="h-3.5 w-3.5" />
-                    <span>{client.phone}</span>
+                    <span>{client.phone ?? "—"}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Globe className="h-3.5 w-3.5" />
-                    <span>{client.website}</span>
+                    <span>{client.companyName.toLowerCase().replace(/\s+/g, "")}.com</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {client.services.map((s) => (
-                      <Badge key={s} variant="secondary" className="text-[10px]">
-                        {s.replace("_", " ")}
-                      </Badge>
-                    ))}
-                  </div>
+                  <Badge variant="secondary" className="text-[10px]">
+                    Client
+                  </Badge>
                   <Badge variant={paymentStatusColors[client.paymentStatus]}>
                     {client.paymentStatus}
                   </Badge>

@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useTheme } from "next-themes";
-import { cn } from "@/lib/utils";
 import { Bell, Moon, Sun, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
